@@ -1,0 +1,37 @@
+#editor-control-container {
+  position: absolute;
+  top: 0px;
+  left: 0px;
+  width: calc(100vw - 10px);
+  height: calc(var(--controls-height) - 14px);
+
+  padding: 5px;
+  border-bottom: solid #5d5789 4px;
+  background-color: #c1bceb;
+}
+
+.controls-icons {
+  position: absolute;
+  image-rendering: pixelated;
+  width: 32px;
+  padding: 5px;
+  border-radius: 8px;
+  user-select: none;
+}
+
+.controls-icons:hover {
+  cursor: pointer;
+  background-color: var(--highlight);
+}
+
+.controls-icons.actives {
+  background-color: var(--actives);
+}
+
+.controls-icons.actives:hover {
+  background-color: var(--actives-highlight);
+}
+
+.controls-icons > img {
+  width: 100%;
+}

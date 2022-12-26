@@ -1,0 +1,76 @@
+#slides-side {
+  width: 200px;
+  height: calc(100vh - var(--controls-height));
+  background-color: #cac299;
+  display: inline-block;
+  position: absolute;
+  left: 0px;
+  top: var(--controls-height);
+}
+
+#slides-side-resize {
+  position: absolute;
+  right: 0px;
+  top: 0px;
+  height: 100%;
+  width: 6px;
+  background-color: #ada062;
+}
+
+/* #slides-side-resize::after {
+  content: "⋮";
+  font-size: 30px;
+  text-align: center;
+  position: absolute;
+  top: calc(50vh - 15px);
+} */
+
+#slides-side-resize:hover {
+  cursor: ew-resize;
+}
+
+.slide-preview-containers {
+  width: 20px;
+  height: 20px;
+  background-color: #d8d6c5;
+  position: relative;
+}
+
+.slide-previews {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  background-color: white;
+
+  border: solid black 2px;
+  border-radius: 10px;
+}
+
+.slide-numbers {
+  position: absolute;
+  right: 10px;
+  bottom: 5px;
+  font-family: pixelMx;
+  user-select: none;
+}
+
+.slide-names {
+  position: absolute;
+  left: 20px;
+  bottom: 5px;
+  font-family: pixelMx;
+  user-select: none;
+  color: #3d8f3d;
+}
+
+.slide-preview-containers:hover {
+  background-color: var(--highlight);
+}
+
+.slide-preview-containers[selected] {
+  background-color: var(--actives);
+}
+
+.slide-preview-containers[selected]:hover {
+  background-color: var(--actives-highlight);
+}

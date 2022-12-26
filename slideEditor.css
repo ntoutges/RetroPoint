@@ -1,0 +1,49 @@
+#slide-editor-container {
+  width: calc(100vw - 200px);
+  height: calc(100vh - var(--controls-height));
+  background-color: grey;
+
+  position: absolute;
+  left: 200px;
+  top: var(--controls-height);
+}
+
+#slide-editor {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background-color: white;
+}
+
+.widgets {
+  position: absolute;
+  user-select: none;
+}
+
+.boundings {
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  height: 100%;
+  width: 100%;
+  background-color: #00000022;
+  border: solid #6363e0 3px;
+}
+
+.boundings.idles {
+  border: solid #80808070;
+  background-color: transparent;
+}
+
+.textboxes {
+  border: none;
+  outline: none;
+  margin: 0px;
+
+  font-size: inherit;
+  font-family: pixelMx;
+  resize: none;
+
+  position: relative;
+  pointer-events: none;
+}
