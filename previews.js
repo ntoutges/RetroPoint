@@ -1,9 +1,9 @@
-import { Slide } from "./slides.js";
+import { spacing } from "./graphics.js";
 
 var aspectRatio = 16/9;
 
 var slidePreviews = [];
-export var currentSlide = null;
+var currentSlide = null;
 
 var doResizes = [];
 var doSlideChanges = [];
@@ -41,28 +41,29 @@ export class SlidePreview {
   constructor({
     index=0,
     name="",
-    slide = new Slide({})
+    slide
   }) {
-    this.slide = slide;
-
     const container = $("#slides-side");
 
     this.slideIndex = index;
     this.slideName = name;
     this.prevChars = 0;
+    
+    this.slide = slide;
 
     this.el = $(`<div class=\"slide-preview-containers\"></div>`);
     this.slideIndexTxt = $("<div class=\"slide-numbers\"></div>");
     this.slideNameTxt = $("<div class=\"slide-names\"></div>")
-    this.preview = $("<div class=\"slide-previews\"></div>");
-
-    this.setSize(container.width() - 6);
+    this.preview = $("<canvas class=\"slide-previews\"></canvas>");
 
     this.el.append(this.preview);
     this.el.append(this.slideIndexTxt);
     this.el.append(this.slideNameTxt);
     container.append(this.el)
     slidePreviews.push(this);
+
+    this.ctx = this.preview.get(0).getContext("2d");
+    this.setSize(container.width() - 6);
 
     this.el.click(() => {
       if (currentSlide != null) currentSlide.deselect();
@@ -79,8 +80,16 @@ export class SlidePreview {
 
     this.el.css("width", elWidth);
     this.el.css("height", elWidth / aspectRatio + 20);
-    this.preview.css("width", prWidth);
-    this.preview.css("height", prWidth / aspectRatio);
+    this.preview.attr("width", prWidth);
+    this.preview.attr("height", prWidth / aspectRatio);
+
+    this.slide.setContext({
+      ctx: this.ctx,
+      scale: {
+        "x": this.preview.width() / (spacing.x * this.slide.cols),
+        "y": this.preview.height() / (spacing.y * this.slide.rows),
+      }
+    });
 
     let characters = Math.round(prWidth * 0.0877)-1;
     if (characters != this.prevChars) {

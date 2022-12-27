@@ -1,207 +1,355 @@
-var widgetIds = 0;
-var dragging = null;
-var didDrag = false;
+import * as previews from "./previews.js";
+import { bitmaps, spacing } from "./graphics.js";
 
-const editListeners = [];
-export function onEdit(func) { editListeners.push(func); }
-function didEdit(widget) {
-  for (let func of editListeners) { func(widget); }
+previews.onSlideChange((slide) => {
+  previousSlide = currentSlide;
+  currentSlide = slides[slide.slideIndex];
+  doSlideChange();
+  // currentSlide?.render();
+});
+
+const CURSOR_FLASH_TIME = 700;
+
+var previousSlide = null;
+export var currentSlide = null;
+
+const slides = [];
+var slideCount = 0;
+
+const doSlideChanges = [];
+export function onSlideChange(funct) { doSlideChanges.push(funct); }
+function doSlideChange() {
+  if (currentSlide == null) return;
+  doSlideChanges.forEach(func => { func(previousSlide) });
 }
-
-$("body").mousemove((e) => {
-  const offset = $("#slide-editor").offset();
-  if (dragging !== null) {
-    dragging.setPos(
-      e.pageX - offset.left,
-      e.pageY - offset.top
-    );
-    didDrag = true;
-  }
-});
-$("body").mouseup((e) => {
-  if (dragging !== null) {
-    dragging.widget.css("z-index", "");
-    const canvas = $("#slide-editor");
-    canvas.css("cursor", "");
-
-    const offset = dragging.widget.offset();
-    const canvasOff = canvas.offset();
-    
-    const x = (offset.left - canvasOff.left) / canvas.width()
-    const y = (offset.top - canvasOff.top) / canvas.height();
-
-    dragging.pos = { x,y };
-    didEdit(dragging);
-
-    dragging = null;
-  }
-});
-
-export function setEditState(state) { this.isEditable = state; }
-
-function getWidgetId() { return widgetIds++; }
 
 export class Slide {
   constructor({
-    widgets = []
+    screen = [],
+    cols = 40,
+    rows = 25
   }) {
-    this.widgets = {};
-    for (let widget of widgets) {
-      widgets[widget.id] = widgets;
-    }
-  }
-  addWidget(widget) { this.widgets[widget.id] = widget; }
-  removeWidget(widgetId) { delete this.widgets[widgetId]; }
-  replaceWidget(widget) {
-    if (!(widget.id in this.widgets)) return this.addWidget(widget);
-    this.widgets[widget.id].widget.remove();
-    this.widgets[widget.id] = widget;
-  }
-  render(canvas) {
-    for (let i in this.widgets) {
-      this.widgets[i].render(canvas);
-    }
-  }
-}
+    this.screen = screen;
+    this.cols = cols;
+    this.rows = rows;
+    this.area = cols * rows;
 
-// this class shoult be considered as abstract, never use the bare class without setting the 'el' property
-export class Widget {
-  constructor({
-    el = $("<div></div>"),
-    x=0, // percent in range [0,1]
-    y=0 // percent in range [0,1]
-  }) {
-    this.pos = { x,y };
+    this.cursor = 0;
+    this.cursorType = [ "<=", "=>", 0 ];
+    this.highlight = -2;
 
-    this.isEditable = true;
-    this.isEditing = false;
-    this.rendered = false;
-    this.el = el;
-    this.widget = $("<div class=\"widgets\"></div>");
-    this.bounding = $("<div class=\"boundings idles\" data-visible=\"0\"></div>");
+    this.contexts = [];
+    this.scales = [];
 
-    this.widget.append(this.el);
-
-    const thisOne = this;
-    this.widget.mouseover((e) => { thisOne.mouseover.call(thisOne, e) });
-    this.widget.mouseleave((e) => { thisOne.mouseleave.call(thisOne, e) });
-    this.widget.click((e) => { thisOne.click.call(thisOne, e) });
-    this.widget.mousedown((e) => { thisOne.mousedown.call(thisOne, e); });
-
-    this.id = getWidgetId();
-    this.data = {};
-
-    this.dragOffset = { x:0, y:0 }
-  }
-  render(canvas) {
-    this.widget.css("left", this.pos.x * canvas.width());
-    this.widget.css("top", this.pos.y * canvas.height());
-
-    const isVisible = this.isVisible(canvas);
-
-    if (isVisible) {
-      if (this.isEditable) this.widget.prepend(this.bounding);
-      else this.widget.remove();
-    }
-
-    if (this.rendered && !isVisible) {
-      this.widget.remove();
-      this.rendered = false;
-    }
-    else if (isVisible) {
-      canvas.append(this.widget);
-      this.rendered = true;
-    }
-  }
-  isVisible(canvas) {
-    const left = parseInt(this.widget.css("left"), 10);
-    const top = parseInt(this.widget.css("top"), 10);
-    return left < canvas.width() && left + this.widget.width() > 0 && top < canvas.height() && top + this.widget.height() > 0;
-  }
-
-  mouseover(e) {
-    if (this.isEditable && this.bounding.attr("data-visible") == "0") {
-      this.bounding.get(0).classList.remove("idles");
-      // this.widget.prepend(this.bounding);
-      this.bounding.attr("data-visible", "1");
-    }
-  }
-  mouseleave(e) {
-    if (this.isEditable && this.bounding.attr("data-visible") == "1" && !this.isEditing) {
-      // this.bounding.remove();
-      this.bounding.get(0).classList.add("idles");
-      this.bounding.attr("data-visible", "0");
-    }
-  }
-  mousedown(e) {
-    if (this.isEditing) return;
-    const offset = this.widget.offset();
-    this.dragOffset.x = e.pageX - offset.left;
-    this.dragOffset.y = e.pageY - offset.top;
-    this.widget.css("z-index", "999999999"); // bring to front
-    dragging = this;
-    didDrag = false;
-    $("#slide-editor").css("cursor", "move");
-  }
-  click(e) {
-    if (didDrag) return;
-    if (this.isEditable) this.edit(e);
-  }
-  edit() { this.isEditing = true; }
-  deEdit() { this.isEditing = false; }
-
-  setPos(x,y) {
-    this.widget.css("left", x - this.dragOffset.x);
-    this.widget.css("top", y - this.dragOffset.y);
-  }
-}
-
-export class TextBox extends Widget {
-  constructor({
-    text="",
-    size=16,
-    x,
-    y
-  }) {
-    super({ x,y });
-    this.el.text(text);
-    this.el.get(0).classList.add("textboxes");
-    this.el.attr("contenteditable", "true");
-
-    this.data = { text, size };
-    
-    this.el.blur(this.deEdit.bind(this));
-  }
-
-  render(canvas) {
-    super.render(canvas);
-    const scale = canvas.width() / 1000;
-    
-    this.widget.css("font-size", this.data.size * scale);
-    this.widget.css("padding", 5 * scale);
-  }
-
-  edit(e) {
-    super.edit();
-    this.el.focus();
-    this.el.css("pointer-events", "all");
-  }
-  deEdit() {
-    this.data.text = this.el.html();
-    super.deEdit();
-    this.el.css("pointer-events", "");
-    this.mouseleave(null);
-    didEdit(this);
-  }
-
-  copy() {
-    const widget = new TextBox({
-      text: this.data.text,
-      size: this.data.size,
-      x: this.pos.x,
-      y: this.pos.y
+    this.preview = new previews.SlidePreview({
+      index: slideCount++,
+      slide: this
     });
-    widget.id = this.id;
-    return widget;
+
+    this.cursorToggleTime = 0;
+    this.cursorEN = true;
+
+    slides.push(this);
+    if (currentSlide == null) {
+      currentSlide = this;
+      doSlideChange();
+    }
+
+    // fill [screen] with ""
+    for (let i = screen.length; i < this.area; i++) {
+      this.screen.push(" ");
+    }
+  }
+  render() {
+    for (let c in this.contexts) {
+      const ctx = this.contexts[c];
+      const scale = this.scales[c];
+
+      const toRender = this.screen.slice();
+      if (this.cursorEN) {
+        if (this.highlight >= 0) {
+          const min = Math.min(this.highlight, this.cursor);
+          const max = Math.max(this.highlight, this.cursor);
+          toRender.splice(min - this.cursorType[2], 1, this.cursorType[1]);
+          toRender.splice(max + this.cursorType[2], 1, this.cursorType[0])
+        }
+        else toRender.splice(this.cursor + this.cursorType[2], 1, this.cursorType[0]);
+      }
+      
+      ctx.beginPath();
+      ctx.clearRect(0,0, Math.ceil(this.cols*scale.x * spacing.x), Math.ceil(this.rows*scale.y * spacing.y));
+      for (let i in toRender) {
+        this.renderChar(
+          toRender[i],
+          i % this.cols,
+          Math.floor(i / this.cols),
+          ctx, scale
+        );
+      }
+      ctx.fill();
+    }
+  }
+  renderChar(char, offX,offY, ctx, scale) {
+    const bitmap = (char in bitmaps) ? bitmaps[char] : bitmaps["unknown"];
+    for (let y in bitmap) {
+      for (let x in bitmap[y]) {
+        if (bitmap[y][x] != " ") ctx.rect(((spacing.x*offX) + +x) * scale.x, ((spacing.y*offY) + +y) * scale.y, scale.x,scale.y);
+      }
+    }
+  }
+
+  clearChar(offX,offY) {
+    for (let c in this.contexts) {
+      const ctx = this.contexts[c];
+      const scale = this.scales[c];
+      ctx.clearRect(Math.floor(spacing.x*offX*scale.x), Math.floor(spacing.y*offY*scale.y), Math.ceil(spacing.x*scale.x), Math.ceil(spacing.y*scale.y));
+    }
+  }
+  reRenderChar(screenIndex) {
+    let char = this.screen[screenIndex];
+    if (this.cursorEN) {
+      if (this.highlight >= 0) {
+        if ((this.cursor + this.cursorType[2] == screenIndex && this.cursor > this.highlight) || (this.highlight - this.cursorType[2] == screenIndex && this.highlight > this.cursor)) char = this.cursorType[0]; 
+        else if ((this.cursor + this.cursorType[2] == screenIndex && this.cursor < this.highlight) || (this.highlight - this.cursorType[2] == screenIndex && this.highlight < this.cursor)) char = this.cursorType[1];
+      }
+      else if (screenIndex == this.cursor + this.cursorType[2]) char = this.cursorType[0];
+    }
+    const offY = Math.floor(screenIndex / this.cols);
+    const offX = screenIndex % this.cols;
+    
+    this.clearChar(offX, offY);
+    if (screenIndex >= this.screen.length && screenIndex != this.cursor) return;
+    
+    for (let c in this.contexts) {
+      const ctx = this.contexts[c];
+      const scale = this.scales[c];
+      
+      ctx.beginPath();
+      this.renderChar(
+        char, offX,offY,
+        ctx,scale
+      );
+      ctx.fill();
+    }
+  }
+
+  addContext(ctxScale) {
+    this.contexts.push(ctxScale.ctx);
+    this.scales.push(ctxScale.scale);
+  }
+  setContext(ctxScale) {
+    const i = this.contexts.indexOf(ctxScale.ctx);
+    if (i != -1) this.scales.splice(i,1, ctxScale.scale);
+    else {
+      this.contexts.push(ctxScale.ctx);
+      this.scales.push(ctxScale.scale);
+    }
+  }
+  removeContext(ctx) {
+    const i = this.contexts.indexOf(ctx);
+    if (i != -1) {
+      this.contexts.splice(i,1);
+      this.scales.splice(i,1);
+    }
+  }
+
+  onmousedown(event, element) {
+    this.cursorToggleTime = (new Date).getTime() + CURSOR_FLASH_TIME;
+    this.cursorEN = true;
+    
+    const oldCursor = this.cursor;
+    this.cursor = this.getClickCharacter(event,element)
+    this.reRenderChar(oldCursor);
+    this.reRenderChar(this.cursor);
+
+    if (this.highlight >= 0) this.removeHighlight();
+  }
+
+  onmousedrag(event, element) {
+    this.cursorToggleTime = (new Date).getTime() + CURSOR_FLASH_TIME;
+    this.cursorEN = true;
+    
+    const oldHighlight = this.highlight;
+    this.highlight = this.getClickCharacter(event,element)
+
+    this.reRenderChar(oldHighlight);
+    
+    if (this.highlight == this.cursor) this.highlight = -2;
+    else this.reRenderChar(this.highlight);
+    this.reRenderChar(this.cursor); // render cursor in the right direction
+  }
+
+  getClickCharacter(event, element) {
+    const bounds = element.get(0).getBoundingClientRect();
+    const x = Math.floor(this.cols * (event.pageX - bounds.left) / element.width());
+    const y = Math.floor(this.rows * (event.pageY - bounds.top) / element.height());
+    return x + y*this.cols;
+  }
+
+  onkeypress(key, isInsert) {
+    if (this.highlight >= 0) this.removeKey(isInsert, true);
+
+    if (isInsert) this.screen[this.cursor] = key;
+    else {
+      let removedOne = false;
+      for (let nextLine = (Math.floor(this.cursor / this.cols) + 1) * this.cols; nextLine < this.area; nextLine += this.cols) {
+        if (nextLine >= this.area || (this.screen[nextLine-1] == " " && this.screen[nextLine] == " ")) { // remove trailing space
+          this.screen.splice(nextLine,1);
+          removedOne = true;
+          break;
+        }
+      }
+      if (!removedOne) this.screen.splice(this.area-1,1); // remove bottom-right character
+      this.screen.splice(this.cursor,0, key);
+    }
+    this.cursorToggleTime = (new Date).getTime() + CURSOR_FLASH_TIME;
+    this.cursorEN = true;
+
+    this.moveCursor(1);
+    this.render();
+  }
+
+  nextLine() {
+    let endPos = this.cursor + this.cols;
+    // if (this.cursor+1 < this.area && this.screen[this.cursor + 1] != " ") endPos -= this.cursor % this.cols; // reset at left margin
+
+    for (let i = this.cursor; i < endPos; i++) { this.screen.splice(this.cursor,0," "); }
+    if (this.screen.length > this.area) this.screen.splice(this.area, this.screen.length - this.area);
+
+    this.cursorToggleTime = (new Date).getTime() + CURSOR_FLASH_TIME;
+    this.cursorEN = true;
+
+    this.moveCursor(endPos - this.cursor);
+    this.render();
+  }
+
+  removeKey(isInsert, doRender=true) {
+    if (this.highlight >= 0) {
+      const min = Math.min(this.highlight, this.cursor) + 2;
+      const max = Math.max(this.highlight, this.cursor);
+      
+      this.cursor = max;
+
+      this.removeHighlight();
+      for (let i = min; i < max; i++) { this.removeKey(isInsert, false); }
+      this.render();
+    }
+    
+    this.moveCursor(-1);
+    if (isInsert) {
+      this.screen[this.cursor] = " ";
+    }
+    else {
+      let addedOne = false;
+      for (let nextLine = (Math.floor(this.cursor / this.cols) + 1) * this.cols; nextLine < this.area; nextLine += this.cols) {
+        if (nextLine >= this.area || (this.screen[nextLine-1] == " " && this.screen[nextLine] == " ")) { // remove trailing space
+          this.screen.splice(nextLine,0, " ");
+          addedOne = true;
+          break;
+        }
+      }
+      if (!addedOne) this.screen.splice(this.area,0, " "); // remove bottom-right character
+
+      this.screen.splice(this.cursor, 1);
+      if (doRender) this.render();
+    }
+  }
+  removeWord() { // ctrl-backspace
+    
+  }
+
+  moveTab(isInsert, step=4) {
+    let y = Math.floor(this.cursor / this.cols);
+    let x = (this.cursor - y) % step;
+    for (let i = 0; i < step - x; i++) {
+      this.onkeypress(" ", isInsert)
+    }
+  }
+
+  moveCursor(step) {
+    this.cursorToggleTime = (new Date).getTime() + CURSOR_FLASH_TIME;
+    this.cursorEN = true;
+
+    if (!Number.isFinite(step)) {
+      const finiteStep = Math.sign(step);
+      let oldCursor = this.cursor;
+      this.cursor += finiteStep;
+      this.reRenderChar(oldCursor + this.cursorType[2]);
+
+      const spaceInvert = this.screen[this.cursor] == " ";
+      while (oldCursor != this.cursor && this.cursor >= 0 && this.cursor < this.area-1) {
+        oldCursor = this.cursor;
+        this.cursor += finiteStep;
+        if (spaceInvert ^ this.screen[this.cursor] == " ") { break; }
+      }
+      // this.moveCursor(-finiteStep);
+      if (step < 0) this.cursor++;
+      this.moveCursor(0);
+      return;
+    }
+
+    if (step != 0 && this.highlight >= 0) {
+      this.removeHighlight(step);
+      return;
+    }
+    
+    const oldCursor = this.cursor;
+    this.cursor += step;
+    if (this.cursor < 0) this.cursor = 0;
+    else if (this.cursor >= this.area) this.cursor = this.area-1;
+
+    this.reRenderChar(oldCursor + this.cursorType[2]);
+    if (oldCursor != this.cursor) {
+      this.reRenderChar(this.cursor + this.cursorType[2]);
+    }
+  }
+
+  moveHighlight(step) {
+    const oldHighlight = this.highlight;
+    if (this.highlight == -2 && step != 0) {
+      if (step > 0) {
+        this.cursor -= 2;
+        this.highlight = this.cursor + 1;
+      }
+      else {
+        this.highlight = this.cursor - 1;
+      }
+    }
+
+    this.highlight += step;
+    if (this.highlight < -1) this.highlight = -1;
+    else if (this.highlight > this.area) this.highlight = this.area;
+    
+    this.cursorToggleTime = (new Date).getTime() + CURSOR_FLASH_TIME;
+    this.cursorEN = true;
+
+    this.reRenderChar(oldHighlight - this.cursorType[2])
+    if (oldHighlight != this.highlight) {
+      this.reRenderChar(this.highlight - this.cursorType[2]);
+    }
+    this.moveCursor(0);
+  }
+
+  removeHighlight(step=0) {
+    const oldHighlight = this.highlight;
+    this.highlight = -2;
+    this.reRenderChar(oldHighlight);
+
+    if (step == 0) return;
+
+    const oldCursor = this.cursor;
+    this.cursor = (step > 0) ? Math.max(oldHighlight, this.cursor) : Math.min(oldHighlight, this.cursor) + 2;
+    this.reRenderChar(oldCursor);
+    this.reRenderChar(this.cursor);
+  }
+
+  runCursor() {
+    const time = (new Date).getTime()
+    if (time > this.cursorToggleTime) {
+      this.cursorToggleTime = time + CURSOR_FLASH_TIME;
+      this.cursorEN = !this.cursorEN;
+      this.reRenderChar(this.cursor);
+      if (this.highlight >= 0) this.reRenderChar(this.highlight);
+    }
   }
 }

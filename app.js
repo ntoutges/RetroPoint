@@ -1,11 +1,13 @@
 const $ = window.$;
+import { canvas } from "./editor.js";
 import * as previews from "./previews.js";
 import * as slides from "./slides.js";
+import { changeCharset } from "./graphics.js";
 
-const aspectRatio = 16/9;
+// changeCharset("PETSCII")
+
+const aspectRatio = 4/3;
 previews.setAspectRatio(aspectRatio);
-
-var currentSlide = new slides.Slide({});
 
 doResize(null, 200);
 previews.onResize(doResize);
@@ -13,90 +15,116 @@ function doResize(ev, rightBorder) {
   const newWidth = $("body").width() - rightBorder;
   const editorWidth = newWidth - 20;
   $("#slide-editor-container").css("width", newWidth);
-  $("#slide-editor").css("width", editorWidth);
-  $("#slide-editor").css("height", editorWidth / aspectRatio);
   $("#slide-editor-container").css("left", rightBorder);
-  currentSlide.render($("#slide-editor"));
+  $("#slide-editor").attr("width", editorWidth);
+  $("#slide-editor").attr("height",  editorWidth / aspectRatio);
 }
 
-var icons = {};
-class Icon {
-  constructor({
-    name,
-    url,
-    enableAction = () => {},
-    disableAction = () => {},
-    editAction = () => {}
-  }) {
-    name = name.replace(/ /g, "-"); // replace all spaces with dashes
+let isMouseDown = false;
+canvas.mousedown((e) => {
+  slides.currentSlide.onmousedown(e, $("#slide-editor"));
+  isMouseDown = true;
+});
+canvas.mouseup((e) => { isMouseDown = false; });
+canvas.mousemove((e) => {
+  if(isMouseDown) slides.currentSlide.onmousedrag(e, $("#slide-editor"));
+});
 
-    icons[name] = this;
-    this.el = $(`<div id=\"icon-${name}\" class=\"controls-icons\"><img src=\"${url}\"></div>`);
-    $("#editor-control-container").append(this.el);
 
-    this.enAct = enableAction;
-    this.diAct = disableAction;
-    this.active = false;
 
-    this.el.click(this.toggle.bind(this));
-
-    const thisOne = this;
-    $("#slide-editor").click(function(event) { if (thisOne.active) editAction.call(thisOne, event); });
-  }
-  toggle() {
-    if (this.active) {
-      this.el.get(0).classList.remove("actives");
-      this.active = false;
-      this.diAct();
-    }
-    else {
-      this.el.get(0).classList.add("actives");
-      this.active = true;
-      this.enAct();
-    }
-  }
+const translations = {
+  "+Enter": "\n",
+  "!ArrowLeft": "<-",
+  "!ArrowRight": "->",
+  "!ArrowUp": "|^",
+  "!ArrowDown": "|v"
 }
 
-new Icon({
-  name: "add-text-box",
-  url: "icons/text-box.png",
-  enableAction: () => { $("#slide-editor").css("cursor", "text"); },
-  disableAction: () => { $("#slide-editor").css("cursor", ""); },
-  editAction: function(e) {
-    const offset = $("#slide-editor").offset();
-    const canvas = $("#slide-editor");
+var isInsert = false;
+window.addEventListener("keydown", (e) => {
+  var key = e.key;
+  var isPrintable = true;
+  var translation = "";
+  if (key.length != 1) {
+    translation = (e.shiftKey ? "+" : "") + (e.ctrlKey ? "^" : "") + (e.altKey ? "!" : "") + e.key;
+    if (translation in translations) key = translations[translation];
+    else isPrintable = false;
+  }
 
-    this.toggle();
-    const widget = new slides.TextBox({
-      x: (e.pageX - offset.left) / canvas.width(),
-      y: (e.pageY - offset.top) / canvas.height()
-    });
-    currentSlide.addWidget(widget);
+  const slide = slides.currentSlide;
+  if (isPrintable) {
+    slide.onkeypress(key, isInsert);
+    return;
+  }
 
-    widget.render(canvas);
-    widget.widget.click()
+  switch (translation) {
+    case "Enter":
+      slide.nextLine();
+      break;
+
+    case "Delete":
+    case "+Delete":
+      slide.cursor++;
+    case "Backspace":
+    case "+Backspace":
+      slide.removeKey(isInsert);
+      break;
+    case "^Backspace":
+      slide.removeWord();
+      break;
+    case "Tab":
+      e.preventDefault();
+      slide.moveTab(isInsert, 3);
+      break;
+
+    case "ArrowUp":
+      slide.moveCursor(-slide.cols);
+      break;
+    case "ArrowDown":
+      slide.moveCursor(slide.cols);
+      break;
+    case "ArrowRight":
+      slide.moveCursor(1);
+      break;
+    case "ArrowLeft":
+      slide.moveCursor(-1);
+      break;
+    case "+ArrowUp":
+      slide.moveHighlight(-slide.cols);
+      break;
+    case "+ArrowDown":
+      slide.moveHighlight(slide.cols);
+      break;
+    case "+ArrowRight":
+      slide.moveHighlight(1);
+      break;
+    case "+ArrowLeft":
+      slide.moveHighlight(-1);
+      break;
+    case "^ArrowUp":
+      slide.moveCursor(-Infinity);
+      break;
+    case "^ArrowDown":
+      slide.moveCursor(Infinity);
+      break;
+    case "^ArrowRight":
+      slide.moveCursor(Infinity);
+      break;
+    case "^ArrowLeft":
+      slide.moveCursor(-Infinity);
+      break;
+    
+    case "Insert":
+      isInsert = !isInsert;
+      slide.cursorType = isInsert ? [ "< =", "= >", 0 ] : ["<=", "=>", 0]
+      slide.moveCursor(0);
+      slide.moveHighlight(0);
+      break;
+    default:
+      console.log(translation)
   }
 });
 
-
-previews.onSlideChange((slide) => {
-  currentSlide = new slides.Slide({});
-  $("#slide-editor").html("");
-  for (let i in slide.slide.widgets) {
-    currentSlide.addWidget(slide.slide.widgets[i].copy());
-  }
-  currentSlide.render($("#slide-editor"));
-});
-
-slides.onEdit((widget) => {
-  const copy = widget.copy();
-  copy.isEditable = false;
-  previews.currentSlide.slide.replaceWidget(copy);
-  copy.render(previews.currentSlide.el);
-});
-
-
-
-new previews.SlidePreview({index: 1, name: "Start"})
-new previews.SlidePreview({index: 2})
-new previews.SlidePreview({index: 3})
+new slides.Slide({});
+new slides.Slide({})
+new slides.Slide({})
