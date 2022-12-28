@@ -2,18 +2,30 @@ import * as previews from "./previews.js";
 import { bitmaps, spacing } from "./graphics.js";
 
 previews.onSlideChange((slide) => {
+  if (slides.length == 0) return;
   previousSlide = currentSlide;
   currentSlide = slides[slide.slideIndex];
   doSlideChange();
-  // currentSlide?.render();
+  
+  if (previousSlide) {
+    previousSlide.cursorEN = false;
+    previousSlide.render();
+  }
+  if (currentSlide) {
+    currentSlide.moveCursor(0);
+  }
 });
 
+export var cols = 1;
+export var rows = 1;
+
 const CURSOR_FLASH_TIME = 700;
+const CURSOR_BLINK_TIME = 100;
 
 var previousSlide = null;
 export var currentSlide = null;
 
-const slides = [];
+export const slides = [];
 var slideCount = 0;
 
 const doSlideChanges = [];
@@ -23,37 +35,19 @@ function doSlideChange() {
   doSlideChanges.forEach(func => { func(previousSlide) });
 }
 
-export class Slide {
+export class BasicSlide {
   constructor({
     screen = [],
-    cols = 40,
-    rows = 25
+    animation = "default"
   }) {
     this.screen = screen;
-    this.cols = cols;
-    this.rows = rows;
     this.area = cols * rows;
-
-    this.cursor = 0;
-    this.cursorType = [ "<=", "=>", 0 ];
-    this.highlight = -2;
+    this.animation = animation;
 
     this.contexts = [];
     this.scales = [];
 
-    this.preview = new previews.SlidePreview({
-      index: slideCount++,
-      slide: this
-    });
-
-    this.cursorToggleTime = 0;
-    this.cursorEN = true;
-
-    slides.push(this);
-    if (currentSlide == null) {
-      currentSlide = this;
-      doSlideChange();
-    }
+    this.cursorEN = false;
 
     // fill [screen] with ""
     for (let i = screen.length; i < this.area; i++) {
@@ -66,23 +60,24 @@ export class Slide {
       const scale = this.scales[c];
 
       const toRender = this.screen.slice();
+      
       if (this.cursorEN) {
-        if (this.highlight >= 0) {
+        if (this.highlight != -2) {
           const min = Math.min(this.highlight, this.cursor);
           const max = Math.max(this.highlight, this.cursor);
           toRender.splice(min - this.cursorType[2], 1, this.cursorType[1]);
-          toRender.splice(max + this.cursorType[2], 1, this.cursorType[0])
+          toRender.splice(max + this.cursorType[2], 1, this.cursorType[0]);
         }
         else toRender.splice(this.cursor + this.cursorType[2], 1, this.cursorType[0]);
       }
       
       ctx.beginPath();
-      ctx.clearRect(0,0, Math.ceil(this.cols*scale.x * spacing.x), Math.ceil(this.rows*scale.y * spacing.y));
+      ctx.clearRect(0,0, Math.ceil(cols*scale.x * spacing.x), Math.ceil(rows*scale.y * spacing.y));
       for (let i in toRender) {
         this.renderChar(
           toRender[i],
-          i % this.cols,
-          Math.floor(i / this.cols),
+          i % cols,
+          Math.floor(i / cols),
           ctx, scale
         );
       }
@@ -109,13 +104,13 @@ export class Slide {
     let char = this.screen[screenIndex];
     if (this.cursorEN) {
       if (this.highlight >= 0) {
-        if ((this.cursor + this.cursorType[2] == screenIndex && this.cursor > this.highlight) || (this.highlight - this.cursorType[2] == screenIndex && this.highlight > this.cursor)) char = this.cursorType[0]; 
+        if ((this.cursor + this.cursorType[2] == screenIndex && this.cursor >= this.highlight) || (this.highlight - this.cursorType[2] == screenIndex && this.highlight >= this.cursor)) char = this.cursorType[0]; 
         else if ((this.cursor + this.cursorType[2] == screenIndex && this.cursor < this.highlight) || (this.highlight - this.cursorType[2] == screenIndex && this.highlight < this.cursor)) char = this.cursorType[1];
       }
       else if (screenIndex == this.cursor + this.cursorType[2]) char = this.cursorType[0];
     }
-    const offY = Math.floor(screenIndex / this.cols);
-    const offX = screenIndex % this.cols;
+    const offY = Math.floor(screenIndex / cols);
+    const offX = screenIndex % cols;
     
     this.clearChar(offX, offY);
     if (screenIndex >= this.screen.length && screenIndex != this.cursor) return;
@@ -129,6 +124,39 @@ export class Slide {
         char, offX,offY,
         ctx,scale
       );
+      ctx.fill();
+    }
+  }
+  renderLines(topLine, bottomLine) { // inclusive,exclusive
+    const topIndex = topLine * cols;
+    const bottomIndex = bottomLine * cols
+    
+    const toRender = this.screen.slice(topIndex, bottomIndex);
+    if (this.cursorEN) {
+      if (this.highlight >= 0) {
+        const min = Math.min(this.highlight, this.cursor);
+        const max = Math.max(this.highlight, this.cursor);
+        toRender.splice(min - this.cursorType[2] - topIndex, 1, this.cursorType[1]);
+        toRender.splice(max + this.cursorType[2] - topIndex, 1, this.cursorType[0])
+      }
+      else toRender.splice(this.cursor + this.cursorType[2] - topIndex, 1, this.cursorType[0]);
+    }
+
+    for (let c in this.contexts) {
+      const ctx = this.contexts[c];
+      const scale = this.scales[c];
+      
+      ctx.beginPath();
+      ctx.clearRect(0,topLine*scale.y*spacing.y, cols*scale.x*spacing.x, (bottomLine-topLine)*scale.y*spacing.y);
+      for (let i = topIndex; i < bottomIndex; i++) {
+        this.renderChar(
+          toRender[i-topIndex],
+          i % cols,
+          Math.floor(i / cols),
+          ctx,
+          scale
+        )
+      }
       ctx.fill();
     }
   }
@@ -181,9 +209,9 @@ export class Slide {
 
   getClickCharacter(event, element) {
     const bounds = element.get(0).getBoundingClientRect();
-    const x = Math.floor(this.cols * (event.pageX - bounds.left) / element.width());
-    const y = Math.floor(this.rows * (event.pageY - bounds.top) / element.height());
-    return x + y*this.cols;
+    const x = Math.floor(cols * (event.pageX - bounds.left) / element.width());
+    const y = Math.floor(rows * (event.pageY - bounds.top) / element.height());
+    return x + y*cols;
   }
 
   onkeypress(key, isInsert) {
@@ -191,27 +219,35 @@ export class Slide {
 
     if (isInsert) this.screen[this.cursor] = key;
     else {
+      let topLineUpdated = Math.floor(this.cursor / cols);
+      let bottomLineUpdated = rows;
+
       let removedOne = false;
-      for (let nextLine = (Math.floor(this.cursor / this.cols) + 1) * this.cols; nextLine < this.area; nextLine += this.cols) {
+      for (let nextLine = (Math.floor(this.cursor / cols) + 1) * cols; nextLine < this.area; nextLine += cols) {
         if (nextLine >= this.area || (this.screen[nextLine-1] == " " && this.screen[nextLine] == " ")) { // remove trailing space
           this.screen.splice(nextLine,1);
           removedOne = true;
+          bottomLineUpdated = Math.floor(nextLine / cols);
           break;
         }
       }
       if (!removedOne) this.screen.splice(this.area-1,1); // remove bottom-right character
       this.screen.splice(this.cursor,0, key);
+
+      this.renderLines(topLineUpdated, bottomLineUpdated);
     }
+    
     this.cursorToggleTime = (new Date).getTime() + CURSOR_FLASH_TIME;
     this.cursorEN = true;
 
+    const oldCursor = this.cursor;
     this.moveCursor(1);
-    this.render();
+    if (oldCursor == this.area-1) { this.blinkCursor(); }
   }
 
   nextLine() {
-    let endPos = this.cursor + this.cols;
-    // if (this.cursor+1 < this.area && this.screen[this.cursor + 1] != " ") endPos -= this.cursor % this.cols; // reset at left margin
+    let endPos = this.cursor + cols;
+    // if (this.cursor+1 < this.area && this.screen[this.cursor + 1] != " ") endPos -= this.cursor % cols; // reset at left margin
 
     for (let i = this.cursor; i < endPos; i++) { this.screen.splice(this.cursor,0," "); }
     if (this.screen.length > this.area) this.screen.splice(this.area, this.screen.length - this.area);
@@ -224,7 +260,10 @@ export class Slide {
   }
 
   removeKey(isInsert, doRender=true) {
-    if (this.highlight >= 0) {
+    this.cursorToggleTime = (new Date).getTime() + CURSOR_FLASH_TIME;
+    this.cursorEN = true;
+
+    if (this.highlight != -2) {
       const min = Math.min(this.highlight, this.cursor) + 2;
       const max = Math.max(this.highlight, this.cursor);
       
@@ -234,32 +273,41 @@ export class Slide {
       for (let i = min; i < max; i++) { this.removeKey(isInsert, false); }
       this.render();
     }
-    
+
     this.moveCursor(-1);
     if (isInsert) {
       this.screen[this.cursor] = " ";
+      this.reRenderChar(this.cursor);
     }
     else {
+      let topLineUpdated = Math.floor(this.cursor / cols);
+      let bottomLineUpdated = topLineUpdated + 1;
+
       let addedOne = false;
-      for (let nextLine = (Math.floor(this.cursor / this.cols) + 1) * this.cols; nextLine < this.area; nextLine += this.cols) {
+      for (let nextLine = (Math.floor(this.cursor / cols) + 1) * cols; nextLine < this.area; nextLine += cols) {
         if (nextLine >= this.area || (this.screen[nextLine-1] == " " && this.screen[nextLine] == " ")) { // remove trailing space
           this.screen.splice(nextLine,0, " ");
+          bottomLineUpdated = Math.floor(nextLine / cols);
           addedOne = true;
           break;
         }
       }
-      if (!addedOne) this.screen.splice(this.area,0, " "); // remove bottom-right character
+      if (!addedOne) {
+        this.screen.splice(this.area,0, " "); // remove bottom-right character
+        bottomLineUpdated = rows;
+      }
 
       this.screen.splice(this.cursor, 1);
-      if (doRender) this.render();
+      if (doRender) this.renderLines(topLineUpdated, bottomLineUpdated);
     }
   }
-  removeWord() { // ctrl-backspace
-    
+  removeWord(isInsert) { // ctrl-backspace
+    this.moveHighlight(-Infinity);
+    this.removeKey(isInsert);
   }
 
   moveTab(isInsert, step=4) {
-    let y = Math.floor(this.cursor / this.cols);
+    let y = Math.floor(this.cursor / cols);
     let x = (this.cursor - y) % step;
     for (let i = 0; i < step - x; i++) {
       this.onkeypress(" ", isInsert)
@@ -288,14 +336,18 @@ export class Slide {
       return;
     }
 
-    if (step != 0 && this.highlight >= 0) {
+    if (step != 0 && this.highlight > -2) {
       this.removeHighlight(step);
+      this.moveCursor(0);
       return;
     }
     
     const oldCursor = this.cursor;
     this.cursor += step;
-    if (this.cursor < 0) this.cursor = 0;
+
+    if (this.highlight == -2 && this.cursor < 0) this.cursor = 0;
+    else if (this.highlight != -2 && this.cursor < -1) this.cursor = -1;
+    else if (this.highlight == -2 && this.cursor < -1) this.cursor = -1;
     else if (this.cursor >= this.area) this.cursor = this.area-1;
 
     this.reRenderChar(oldCursor + this.cursorType[2]);
@@ -306,14 +358,34 @@ export class Slide {
 
   moveHighlight(step) {
     const oldHighlight = this.highlight;
-    if (this.highlight == -2 && step != 0) {
+    
+    if (this.highlight == -2 && step == 0) return;
+    if (this.highlight == -2) {
+      this.highlight = -3;
       if (step > 0) {
-        this.cursor -= 2;
+        this.moveCursor(-2);
         this.highlight = this.cursor + 1;
       }
       else {
         this.highlight = this.cursor - 1;
       }
+    }
+
+    if (!Number.isFinite(step)) {
+      const finiteStep = Math.sign(step);
+      let oldHighlight = this.highlight;
+      this.highlight += finiteStep;
+      this.reRenderChar(oldHighlight - this.cursorType[2]);
+
+      const spaceInvert = this.screen[this.highlight] == " ";
+      while (oldHighlight != this.highlight && this.highlight >= -1 && this.highlight <= this.area) {
+        oldHighlight = this.highlight;
+        this.highlight += finiteStep;
+        if (spaceInvert ^ this.screen[this.highlight] == " ") { break; }
+      }
+      // if (step < 0) this.highlight++;
+      this.moveHighlight(0);
+      return;
     }
 
     this.highlight += step;
@@ -338,9 +410,34 @@ export class Slide {
     if (step == 0) return;
 
     const oldCursor = this.cursor;
-    this.cursor = (step > 0) ? Math.max(oldHighlight, this.cursor) : Math.min(oldHighlight, this.cursor) + 2;
+    this.cursor = (step > 0) ? Math.max(oldHighlight, this.cursor) : Math.min(oldHighlight, this.cursor) + 1;
     this.reRenderChar(oldCursor);
     this.reRenderChar(this.cursor);
+  }
+}
+
+export class Slide extends BasicSlide {
+  constructor(params) {
+    super(params);
+    
+    if (!currentSlide) {
+      currentSlide = this;
+      doSlideChange();
+    }
+
+    this.preview = new previews.SlidePreview({
+      index: slideCount++,
+      slide: this
+    });
+
+    slides.push(this);
+
+    this.cursor = 0;
+    this.cursorType = [ "<=", "=>", 0 ];
+    this.highlight = -2;
+
+    this.cursorToggleTime = 0;
+    this.cursorEN = true;
   }
 
   runCursor() {
@@ -352,4 +449,17 @@ export class Slide {
       if (this.highlight >= 0) this.reRenderChar(this.highlight);
     }
   }
+
+  blinkCursor() {
+    const time = (new Date).getTime();
+    this.cursorToggleTime = time + CURSOR_BLINK_TIME;
+    this.cursorEN = false;
+    this.reRenderChar(this.cursor);
+    if (this.highlight >= 0) this.reRenderChar(this.highlight);
+  }
+}
+
+export function setResolution(res) {
+  cols = res.x / spacing.x;
+  rows = res.y / spacing.y;
 }

@@ -1,14 +1,18 @@
 import { spacing } from "./graphics.js";
 
 var aspectRatio = 16/9;
+var rows = 1;
+var cols = 1;
 
 var slidePreviews = [];
 var currentSlide = null;
 
 var doResizes = [];
+var doFinResizes = [];
 var doSlideChanges = [];
 
 export function onResize(funct) { doResizes.push(funct); }
+export function onFinishResize(funct) { doFinResizes.push(funct); }
 export function onSlideChange(funct) { doSlideChanges.push(funct); }
 
 var resizingSlides = false;
@@ -20,6 +24,10 @@ $("#slides-side-resize").mousedown(() => {
 $("body").mouseup(stopResizingSlides);
 // $("body").mouseleave(stopResizingSlides);
 function stopResizingSlides() {
+  if (resizingSlides) {
+    doFinResizes.forEach((funct) => funct.call(this));
+    for (const preview of slidePreviews) { preview.solidifySize(); }
+  }
   resizingSlides = false;
   $("body").css("cursor", "");
 }
@@ -31,9 +39,7 @@ $("body").mousemove((ev) => {
   $("#slides-side").css("width", newWidth);
 
   const previewWidth = newWidth - 6;
-  for (const preview of slidePreviews) {
-    preview.setSize(previewWidth);
-  }
+  for (const preview of slidePreviews) { preview.setSize(previewWidth); }
   doResizes.forEach(funct => { funct.call(this, ev,newWidth) });
 });
 
@@ -64,6 +70,7 @@ export class SlidePreview {
 
     this.ctx = this.preview.get(0).getContext("2d");
     this.setSize(container.width() - 6);
+    this.solidifySize();
 
     this.el.click(() => {
       if (currentSlide != null) currentSlide.deselect();
@@ -80,16 +87,8 @@ export class SlidePreview {
 
     this.el.css("width", elWidth);
     this.el.css("height", elWidth / aspectRatio + 20);
-    this.preview.attr("width", prWidth);
-    this.preview.attr("height", prWidth / aspectRatio);
-
-    this.slide.setContext({
-      ctx: this.ctx,
-      scale: {
-        "x": this.preview.width() / (spacing.x * this.slide.cols),
-        "y": this.preview.height() / (spacing.y * this.slide.rows),
-      }
-    });
+    this.preview.css("width", prWidth);
+    this.preview.css("height", prWidth / aspectRatio);
 
     let characters = Math.round(prWidth * 0.0877)-1;
     if (characters != this.prevChars) {
@@ -112,10 +111,30 @@ export class SlidePreview {
       this.slideNameTxt.text(name);
     }
   }
+  solidifySize() {
+    const width = this.preview.width();
+
+    this.preview.attr("width", width);
+    this.preview.attr("height", width / aspectRatio);
+    this.preview.css("width", "");
+    this.preview.css("height", "")
+
+    this.slide.setContext({
+      ctx: this.ctx,
+      scale: {
+        "x": this.preview.width() / (spacing.x * cols),
+        "y": this.preview.height() / (spacing.y * rows),
+      }
+    });
+
+    this.slide.render();
+  }
   select() { this.el.attr("selected", "1"); }
   deselect() { this.el.removeAttr("selected"); }
 }
 
-export function setAspectRatio(ratio) {
-  aspectRatio = ratio;
+export function setResolution(res) {
+  aspectRatio = res.x / res.y;
+  cols = res.x / spacing.x;
+  rows = res.y / spacing.y;
 }

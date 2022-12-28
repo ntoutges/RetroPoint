@@ -11,12 +11,19 @@
     <script src="app.js" type="module" defer></script>
   </head>
   <body>
-    <div id="editor-control-container"></div>
-    <div id="slides-side">
-      <div id="slides-side-resize"></div>
+    <div id="editor-container">
+      <div id="editor-control-container">
+        <button id="toPresent">Present</button>
+      </div>
+      <div id="slides-side">
+        <div id="slides-side-resize"></div>
+      </div>
+      <div id="slide-editor-container">
+        <canvas id="slide-editor"></canvas>
+      </div>
     </div>
-    <div id="slide-editor-container">
-      <canvas id="slide-editor"></canvas>
+    <div id="present-container">
+      <canvas id="present-canvas"></canvas>
     </div>
   </body>
 </html>

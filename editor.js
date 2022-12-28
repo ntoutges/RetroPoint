@@ -5,16 +5,16 @@ import { spacing } from "./graphics.js"
 export const canvas = $("#slide-editor");
 const ctx = canvas.get(0).getContext("2d");
 
-previews.onResize(() => { onChange(); }); // ignore parameters
+previews.onFinishResize(() => { onChange(); }); // ignore parameters
 slides.onSlideChange(onChange);
 function onChange(oldSlide) {
   const slide = slides.currentSlide;
-  const width = canvas.get(0).width;
-  const height = canvas.get(0).height;
+  const width = canvas.width();
+  const height = canvas.height();
 
   const scale = {};
-  scale.x = width / (spacing.x * slide.cols);
-  scale.y = height / (spacing.y * slide.rows);
+  scale.x = width / (spacing.x * slides.cols);
+  scale.y = height / (spacing.y * slides.rows);
 
   if (oldSlide) {
     slide.addContext({ ctx, scale });
@@ -34,4 +34,4 @@ function onChange(oldSlide) {
 
 setInterval(() => {
   slides.currentSlide.runCursor();
-})
+});

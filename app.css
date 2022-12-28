@@ -18,3 +18,20 @@ body {
   font-family: pixelMx;
   src: url(./pixelmix.ttf)
 }
+
+#editor-container, body.presenting > #present-container {
+  display: block;
+}
+
+#present-container, body.presenting > #editor-container {
+  display: none;
+}
+
+#present-canvas {
+  position: absolute;
+  background-color: #5ec97f;
+  
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
