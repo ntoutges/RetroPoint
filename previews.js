@@ -1,9 +1,11 @@
 import { spacing } from "./graphics.js";
+import { BasicSlide, slides } from "./slides.js";
 
 var aspectRatio = 16/9;
 var rows = 1;
 var cols = 1;
 
+var slidePreviewHelds = [];
 var slidePreviews = [];
 var currentSlide = null;
 
@@ -14,6 +16,13 @@ var doSlideChanges = [];
 export function onResize(funct) { doResizes.push(funct); }
 export function onFinishResize(funct) { doFinResizes.push(funct); }
 export function onSlideChange(funct) { doSlideChanges.push(funct); }
+
+export function selectPreview(index) {
+  if (currentSlide != null) currentSlide.deselect();
+  currentSlide = slidePreviews[index]
+  currentSlide.select();
+  doSlideChanges.forEach(funct => { funct(currentSlide); });
+}
 
 var resizingSlides = false;
 $("#slides-side-resize").mousedown(() => {
@@ -26,7 +35,7 @@ $("body").mouseup(stopResizingSlides);
 function stopResizingSlides() {
   if (resizingSlides) {
     doFinResizes.forEach((funct) => funct.call(this));
-    for (const preview of slidePreviews) { preview.solidifySize(); }
+    for (const preview of slidePreviewHelds) { preview.solidifySize(); }
   }
   resizingSlides = false;
   $("body").css("cursor", "");
@@ -39,7 +48,7 @@ $("body").mousemove((ev) => {
   $("#slides-side").css("width", newWidth);
 
   const previewWidth = newWidth - 6;
-  for (const preview of slidePreviews) { preview.setSize(previewWidth); }
+  for (const preview of slidePreviewHelds) { preview.setSize(previewWidth); }
   doResizes.forEach(funct => { funct.call(this, ev,newWidth) });
 });
 
@@ -49,7 +58,7 @@ export class SlidePreview {
     name="",
     slide
   }) {
-    const container = $("#slides-side");
+    const container = $("#previews-holder");
 
     this.slideIndex = index;
     this.slideName = name;
@@ -62,12 +71,14 @@ export class SlidePreview {
     this.slideNameTxt = $("<div class=\"slide-names\"></div>")
     this.preview = $("<canvas class=\"slide-previews\"></canvas>");
 
+    
     this.el.append(this.preview);
     this.el.append(this.slideIndexTxt);
     this.el.append(this.slideNameTxt);
     container.append(this.el)
     slidePreviews.push(this);
-
+    slidePreviewHelds.push(this);
+    
     this.ctx = this.preview.get(0).getContext("2d");
     this.setSize(container.width() - 6);
     this.solidifySize();
@@ -84,11 +95,11 @@ export class SlidePreview {
   }
   setSize(elWidth=null) {
     const prWidth = elWidth - 30;
-
-    this.el.css("width", elWidth);
-    this.el.css("height", elWidth / aspectRatio + 20);
+    
     this.preview.css("width", prWidth);
     this.preview.css("height", prWidth / aspectRatio);
+    this.el.css("width", elWidth);
+    this.el.css("height", this.preview.outerHeight() + 30);
 
     let characters = Math.round(prWidth * 0.0877)-1;
     if (characters != this.prevChars) {
@@ -133,8 +144,47 @@ export class SlidePreview {
   deselect() { this.el.removeAttr("selected"); }
 }
 
+export class AddSlide {
+  constructor() {
+    const container = $("#slides-side");
+
+    this.el = $(`<div class=\"slide-preview-containers adders\"></div>`);
+    this.preview = $("<div class=\"slide-adders\"><div class=\"slide-adders-plus\">+</div></div>");
+    this.title = $("<div class=\"slide-adder-titles\">Add Slide</div>")
+
+    this.el.append(this.preview);
+    this.el.append(this.title)
+    container.append(this.el);
+    slidePreviewHelds.push(this);
+
+    this.setSize(container.width() - 6);
+    this.solidifySize();
+
+    // this.el.click(() => {
+    //   if (currentSlide != null) currentSlide.deselect();
+    //   this.select();
+    //   currentSlide = this;
+
+    //   doSlideChanges.forEach(funct => { funct(currentSlide); });
+    // });
+  }
+  setSize(elWidth=null) {
+    this.el.css("width", elWidth);
+    this.el.css("height", elWidth / aspectRatio + 20);
+    this.preview.css("width", elWidth);
+    this.preview.css("height", elWidth / aspectRatio);
+    
+    const charWidth = elWidth * 4/6;
+    const charHeight = (elWidth * 2/3) / aspectRatio;
+    this.preview.css("font-size", Math.min( charHeight, charWidth, 100 ));
+  }
+  solidifySize() {} // here just to prevent errors
+}
+
 export function setResolution(res) {
   aspectRatio = res.x / res.y;
   cols = res.x / spacing.x;
   rows = res.y / spacing.y;
 }
+
+new AddSlide();

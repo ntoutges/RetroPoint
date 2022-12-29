@@ -1,4 +1,5 @@
 import * as graphics from "./graphics.js";
+import * as previews from "./previews.js";
 import * as slides from "./slides.js";
 
 export var isPresenting = false;
@@ -25,9 +26,9 @@ export function enterFullScreen() {
       $("#present-canvas").attr("width", width);
       $("#present-canvas").attr("height", height);
       isPresenting = true;
-      
-      slideIndex = 0;
-      renderSlide(slides.slides[0]);
+
+      slideIndex = slides.slides.indexOf(slides.currentSlide); // start on current slide
+      renderSlide(slides.slides[slideIndex]);
     }, 100);
   }).catch(err => {
     console.log("Sad")
@@ -38,6 +39,7 @@ document.addEventListener("fullscreenchange", () => {
   if (isPresenting && document.fullscreenElement == null) {
     $("body").get(0).classList.remove("presenting");
     isPresenting = false;
+    previews.selectPreview(slideIndex);
   }
 });
 

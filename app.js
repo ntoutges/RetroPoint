@@ -14,9 +14,8 @@ const resolution = {
 
 const aspectRatio = resolution.x / resolution.y;
 
-previews.setResolution(resolution);
+slides.setResolution(resolution);
 present.setResolution(resolution);
-slides.setResolution(resolution)
 
 doResize(null, 200);
 doCanvasResize();
@@ -66,6 +65,53 @@ canvas.mousemove((e) => {
 //   slides.currentSlide.screen = chars;
 // }, 1000)
 
+const undoStackHeight = 10;
+const undoStack = [];
+
+const pushCounterLimit = 20;
+const pushTimeoutLimit = 500;
+
+var pushCounter = 0;
+var timeout = null;
+function limitedPushToUndoStack(override=false) {
+  if (override) pushCounter = pushCounterLimit+1;
+  
+  if (pushCounter == 0) pushToUndoStack();
+  pushCounter++;
+  
+  if (timeout != null) clearTimeout(timeout);
+  if (!override) {
+    timeout = setTimeout(() => { // reset 0.5s timer
+      pushCounter = 0;
+      timeout = null;
+    }, pushTimeoutLimit);
+  }
+  if (pushCounter > pushCounterLimit) {
+    if (timeout != null) {
+      clearTimeout(timeout);
+      timeout = null;
+    }
+    pushCounter = 0;
+  }
+}
+
+function pushToUndoStack() {
+  if (undoStack.length >= undoStackHeight) undoStack.splice(0,1); // remove "top" of stack
+  undoStack.push({
+    i: slides.slides.indexOf(slides.currentSlide),
+    txt: slides.currentSlide.screen.slice() // copy text
+  });
+}
+
+function pullFromUndoStack() {
+  if (pushCounter != 0) limitedPushToUndoStack(true);
+
+  if (undoStack.length == 0) return;
+  const undo = undoStack.pop(); // pull from "bottom" of stack
+  slides.slides[undo.i].screen = undo.txt;
+  slides.slides[undo.i].render();
+}
+
 
 
 const translations = {
@@ -89,40 +135,86 @@ window.addEventListener("keydown", (e) => {
     else isPrintable = false;
   }
 
-  const slide = slides.currentSlide;
   if (isPrintable) {
-    slide.onkeypress(key, isInsert);
+    limitedPushToUndoStack();
+    slides.currentSlide.onkeypress(key, isInsert);
     return;
   }
 
+  const change = runCommand(translation, e);
+  if (change) limitedPushToUndoStack();
+});
+
+function runCommand(translation, e) {
+  const slide = slides.currentSlide;
   switch (translation) {
     case "Enter":
       slide.nextLine();
-      break;
+      return true;
 
     case "Delete":
     case "+Delete":
       slide.cursor++;
       slide.removeKey(isInsert);
       slide.blinkCursor();
-      break;
+      return true;
     case "Backspace":
     case "+Backspace":
       slide.removeKey(isInsert);
-      break;
+      return true;
     case "^Backspace":
       slide.removeWord(isInsert);
-      break;
+      return true;
     case "Tab":
       e.preventDefault();
       slide.moveTab(isInsert, 3);
-      break;
+      return true;
+
     case "^a":
       e.preventDefault();
-      console.log(slide.highlight)
       slide.moveCursor(Number.MIN_SAFE_INTEGER);
       slide.moveHighlight(Number.MAX_SAFE_INTEGER);
-      break;
+      return false;
+    case "^x":
+      e.preventDefault();
+      runCommand("^c", e);
+      slide.removeWord(isInsert);
+      return true;
+    case "^c":
+      e.preventDefault();
+      const chars = slide.getHighlightedText();
+      for (let i in chars) {
+        if (chars[i].length != 1) chars[i] = `\x18${chars[i]}\x18`; // this 'character' is represented by multiple characters
+      }
+      navigator.clipboard.writeText(chars.join(""));
+      return false;
+    case "^v":
+      e.preventDefault();
+      navigator.clipboard.readText().then(text => {
+        let inMultiChar = false;
+        let currentChar = "";
+        text = text.replace(/\r/g, ""); // this character is effectively useless, and likely to only cause errors on windows
+        for (let i = 0; i < text.length; i++) {
+          if (text[i] == "\x18") {
+            inMultiChar = !inMultiChar;
+          }
+          else { currentChar += text[i]; }
+          if (!inMultiChar) {
+            if (currentChar == "\n") slide.nextLine(true);
+            else slide.onkeypress(
+              currentChar,
+              isInsert,
+              i == text.length-1
+            );
+            currentChar = "";
+          }
+        }
+      });
+      return true;
+    case "^z":
+      e.preventDefault();
+      pullFromUndoStack();
+      return false;
 
     case "ArrowUp":
       slide.moveCursor(-slides.cols);
@@ -178,11 +270,12 @@ window.addEventListener("keydown", (e) => {
       slide.cursorType = isInsert ? [ "< =", "= >", 0 ] : ["<=", "=>", 0]
       slide.moveCursor(0);
       slide.moveHighlight(0);
-      break;
+      return false;
     default:
       console.log(translation)
+      return false;
   }
-});
+}
 
 new slides.Slide({ animation: "row" + JSON.stringify({ step:2, delay: 50 }) });
 new slides.Slide({ animation: "inOut{\"type\":\"row\"}" })

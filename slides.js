@@ -1,20 +1,23 @@
 import * as previews from "./previews.js";
 import { bitmaps, spacing } from "./graphics.js";
 
-previews.onSlideChange((slide) => {
-  if (slides.length == 0) return;
-  previousSlide = currentSlide;
-  currentSlide = slides[slide.slideIndex];
-  doSlideChange();
-  
-  if (previousSlide) {
-    previousSlide.cursorEN = false;
-    previousSlide.render();
-  }
-  if (currentSlide) {
-    currentSlide.moveCursor(0);
-  }
-});
+// prevent errors
+setTimeout(() => {
+  previews.onSlideChange((slide) => {
+    if (slides.length == 0) return;
+    previousSlide = currentSlide;
+    currentSlide = slides[slide.slideIndex];
+    doSlideChange();
+    
+    if (previousSlide) {
+      previousSlide.cursorEN = false;
+      previousSlide.render();
+    }
+    if (currentSlide) {
+      currentSlide.moveCursor(0);
+    }
+  });
+}, 0);
 
 export var cols = 1;
 export var rows = 1;
@@ -214,7 +217,7 @@ export class BasicSlide {
     return x + y*cols;
   }
 
-  onkeypress(key, isInsert) {
+  onkeypress(key, isInsert, doRender=true) {
     if (this.highlight >= 0) this.removeKey(isInsert, true);
 
     if (isInsert) this.screen[this.cursor] = key;
@@ -234,7 +237,7 @@ export class BasicSlide {
       if (!removedOne) this.screen.splice(this.area-1,1); // remove bottom-right character
       this.screen.splice(this.cursor,0, key);
 
-      this.renderLines(topLineUpdated, bottomLineUpdated);
+      if (doRender) this.renderLines(topLineUpdated, bottomLineUpdated);
     }
     
     this.cursorToggleTime = (new Date).getTime() + CURSOR_FLASH_TIME;
@@ -245,9 +248,10 @@ export class BasicSlide {
     if (oldCursor == this.area-1) { this.blinkCursor(); }
   }
 
-  nextLine() {
+  nextLine(reset=false) {
     let endPos = this.cursor + cols;
-    // if (this.cursor+1 < this.area && this.screen[this.cursor + 1] != " ") endPos -= this.cursor % cols; // reset at left margin
+    // if (this.cursor+1 < this.area && this.screen[this.cursor + 1] != " ") endPos -= this.cursor % cols; // reset to left margin
+    if (reset) endPos -= this.cursor % cols; // reset to left margin
 
     for (let i = this.cursor; i < endPos; i++) { this.screen.splice(this.cursor,0," "); }
     if (this.screen.length > this.area) this.screen.splice(this.area, this.screen.length - this.area);
@@ -378,12 +382,11 @@ export class BasicSlide {
       this.reRenderChar(oldHighlight - this.cursorType[2]);
 
       const spaceInvert = this.screen[this.highlight] == " ";
-      while (oldHighlight != this.highlight && this.highlight >= -1 && this.highlight <= this.area) {
+      while (oldHighlight != this.highlight && this.highlight > -1 && this.highlight <= this.area) {
         oldHighlight = this.highlight;
         this.highlight += finiteStep;
         if (spaceInvert ^ this.screen[this.highlight] == " ") { break; }
       }
-      // if (step < 0) this.highlight++;
       this.moveHighlight(0);
       return;
     }
@@ -440,6 +443,13 @@ export class Slide extends BasicSlide {
     this.cursorEN = true;
   }
 
+  getHighlightedText() {
+    if (this.highlight == -2) return "";
+    const min = Math.min(this.cursor, this.highlight) + 1;
+    const max = Math.max(this.cursor, this.highlight);
+    return this.screen.slice(min,max);
+  }
+
   runCursor() {
     const time = (new Date).getTime()
     if (time > this.cursorToggleTime) {
@@ -462,4 +472,5 @@ export class Slide extends BasicSlide {
 export function setResolution(res) {
   cols = res.x / spacing.x;
   rows = res.y / spacing.y;
+  previews.setResolution(res);
 }

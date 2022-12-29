@@ -74,3 +74,27 @@
 .slide-preview-containers[selected]:hover {
   background-color: var(--actives-highlight);
 }
+
+.slide-preview-containers.adders {
+  border-top: solid;
+}
+
+.slide-adders {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+}
+
+.slide-adders-plus {
+  font-family: pixelMx;
+  font-size: inherit;
+  user-select: none;
+}
+
+.slide-adder-titles {
+  text-align: center;
+  font-family: pixelMx;
+  user-select: none;
+  font-size: 16px;
+}
