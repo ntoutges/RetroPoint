@@ -1,5 +1,6 @@
 import { spacing } from "./graphics.js";
-import { BasicSlide, slides } from "./slides.js";
+import { Slide } from "./slides.js";
+import { madeChange } from "./undo.js";
 
 var aspectRatio = 16/9;
 var rows = 1;
@@ -58,6 +59,8 @@ export class SlidePreview {
     name="",
     slide
   }) {
+    new Transition(slide);
+
     const container = $("#previews-holder");
 
     this.slideIndex = index;
@@ -160,13 +163,9 @@ export class AddSlide {
     this.setSize(container.width() - 6);
     this.solidifySize();
 
-    // this.el.click(() => {
-    //   if (currentSlide != null) currentSlide.deselect();
-    //   this.select();
-    //   currentSlide = this;
-
-    //   doSlideChanges.forEach(funct => { funct(currentSlide); });
-    // });
+    this.el.click(() => {
+      new Slide({});
+    });
   }
   setSize(elWidth=null) {
     this.el.css("width", elWidth);
@@ -181,10 +180,67 @@ export class AddSlide {
   solidifySize() {} // here just to prevent errors
 }
 
+const transitionTypes = {
+  "default": "DEFAULT",
+  "row": "ROW",
+  "col": "COLUMN"
+}
+
+export class Transition {
+  constructor(slide) {
+    this.slide = slide;
+
+    const container = $("#previews-holder");
+    this.el = $(`<div class=\"slide-preview-containers transitions\"></div>`);
+    this.preview = $("<select type=\"\" class=\"slide-transitions\"></select>");
+    this.title = $("<div class=\"slide-transition-titles\">TRANSITION</div>")
+
+    for (let i in transitionTypes) {
+      this.preview.append($(`<option value=\"${i}\">${transitionTypes[i]}</option>`));
+    }
+
+    const transitionClass = slide.animation.split("{")[0];
+    this.preview.val(transitionClass);
+    this.ontransitionchange();
+
+    this.el.append(this.preview);
+    this.el.append(this.title)
+    container.append(this.el);
+    slidePreviewHelds.push(this);
+
+    this.setSize(container.width() - 6);
+    this.solidifySize();
+
+    this.preview.on("focus", () => { this.el.get(0).classList.add("hovers"); });
+    this.preview.on("blur", () => { this.el.get(0).classList.remove("hovers"); });
+    this.preview.on("change", () => { this.ontransitionchange() });
+  }
+  setSize(elWidth=null) {
+    this.el.css("width", elWidth);
+  }
+  solidifySize() {} // here just to prevent errors
+  ontransitionchange() {
+    const val = this.preview.val();
+    if (val == "default") this.title.text("TRANSITION");
+    else this.title.text(transitionTypes[val]);
+
+    this.slide.animation = val;
+    this.preview.blur();
+
+    madeChange();
+  }
+}
+
 export function setResolution(res) {
   aspectRatio = res.x / res.y;
   cols = res.x / spacing.x;
   rows = res.y / spacing.y;
+
+  const width = $("#slides-side").width() - 6;
+  for (const preview of slidePreviewHelds) {
+    preview.setSize(width);
+    preview.solidifySize();
+  }
 }
 
 new AddSlide();

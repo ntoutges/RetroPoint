@@ -14,7 +14,9 @@ export function enterFullScreen() {
 
   $("body").get(0).classList.add("presenting");
   ctx.clearRect(0,0, $("#present-canvas").get(0).width, $("#present-canvas").get(0).height);
-
+  renderedSlide.screen = [];
+  renderedSlide.applyResize();
+  
   $("#present-container").get(0).requestFullscreen().then(() => {
     setTimeout(() => {
       let width = $("#present-container").width();
@@ -40,11 +42,13 @@ document.addEventListener("fullscreenchange", () => {
     $("body").get(0).classList.remove("presenting");
     isPresenting = false;
     previews.selectPreview(slideIndex);
+    clearAnimations();
   }
 });
 
 export function setResolution(res) {
   aspectRatio = res.x / res.y;
+  renderedSlide.applyResize();
 }
 
 $("#present-container").click(() => {
@@ -194,6 +198,61 @@ const animations = {
           );
         }, totalDelay, [prevRow, prevRow + step])
         prevRow += step;
+        totalDelay += delays[stepCt];
+        stepCt++;
+      }
+      setGarunteedBufferedTimeout(res, totalDelay);
+    });
+  },
+  /// data: { step?: number, delay?: number, steps?: number[], delays?: number }
+  "col": function(slide, data) {
+    return new Promise(res => {
+      let steps = [];
+      if ("steps" in data) steps = data.steps;
+      else {
+        let step = ("step" in data) ? data.step : 1;
+        if (step <= 0) throw new Error("Invalid step size");
+        for (let i = 0; i < slides.cols; i += step) { steps.push(step); }
+      }
+
+      let delays = [];
+      if ("delays" in data) {
+        delays = data.delays;
+        for (let i = delays.length; i < data.length; i++) { delays.push(100); } // ensure similar lengths
+      }
+      else {
+        let delay = ("delays" in data) ? data.delays : 100;
+        for (let i in steps) { delays.push(delay); }
+      }
+
+      let totalDelay = 0;
+      let stepCt = 0;
+      let prevCol = 0;
+      for (let i = 0; i < steps.length && prevCol < slides.cols; i++) { // last step handled by call to full render()
+        const step = (i < steps.length) ? steps[i] : 1;
+        
+        setBufferedTimeout((rowData) => {
+          const step = rowData[1];
+          for (let j = 0; j < slides.rows; j++) {
+            const startI = j*slides.cols + rowData[0];
+
+            Array.prototype.splice.apply(
+              renderedSlide.screen,
+              [
+                startI,
+                step,
+              ].concat( slide.screen.slice(
+                  startI,
+                  startI + step
+                )
+              )
+            );
+          }
+          renderedSlide.render();
+
+
+        }, totalDelay, [prevCol, step])
+        prevCol += step;
         totalDelay += delays[stepCt];
         stepCt++;
       }

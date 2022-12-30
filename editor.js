@@ -33,5 +33,5 @@ function onChange(oldSlide) {
 // }, 1000);
 
 setInterval(() => {
-  slides.currentSlide.runCursor();
+  if (slides.currentSlide != null) slides.currentSlide.runCursor();
 });

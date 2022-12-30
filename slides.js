@@ -13,17 +13,16 @@ setTimeout(() => {
       previousSlide.cursorEN = false;
       previousSlide.render();
     }
-    if (currentSlide) {
-      currentSlide.moveCursor(0);
-    }
+    if (currentSlide) { currentSlide.blinkCursor(); }
   });
 }, 0);
 
 export var cols = 1;
 export var rows = 1;
+var area = 1;
 
 const CURSOR_FLASH_TIME = 700;
-const CURSOR_BLINK_TIME = 100;
+const CURSOR_BLINK_TIME = 200;
 
 var previousSlide = null;
 export var currentSlide = null;
@@ -44,18 +43,16 @@ export class BasicSlide {
     animation = "default"
   }) {
     this.screen = screen;
-    this.area = cols * rows;
     this.animation = animation;
 
     this.contexts = [];
     this.scales = [];
 
     this.cursorEN = false;
-
-    // fill [screen] with ""
-    for (let i = screen.length; i < this.area; i++) {
-      this.screen.push(" ");
-    }
+    this.applyResize();
+  }
+  applyResize() { // fill [screen] with " "
+    for (let i = this.screen.length; i < area; i++) { this.screen.push(" "); }
   }
   render() {
     for (let c in this.contexts) {
@@ -226,15 +223,15 @@ export class BasicSlide {
       let bottomLineUpdated = rows;
 
       let removedOne = false;
-      for (let nextLine = (Math.floor(this.cursor / cols) + 1) * cols; nextLine < this.area; nextLine += cols) {
-        if (nextLine >= this.area || (this.screen[nextLine-1] == " " && this.screen[nextLine] == " ")) { // remove trailing space
+      for (let nextLine = (Math.floor(this.cursor / cols) + 1) * cols; nextLine < area; nextLine += cols) {
+        if (nextLine >= area || (this.screen[nextLine-1] == " " && this.screen[nextLine] == " ")) { // remove trailing space
           this.screen.splice(nextLine,1);
           removedOne = true;
           bottomLineUpdated = Math.floor(nextLine / cols);
           break;
         }
       }
-      if (!removedOne) this.screen.splice(this.area-1,1); // remove bottom-right character
+      if (!removedOne) this.screen.splice(area-1,1); // remove bottom-right character
       this.screen.splice(this.cursor,0, key);
 
       if (doRender) this.renderLines(topLineUpdated, bottomLineUpdated);
@@ -245,16 +242,16 @@ export class BasicSlide {
 
     const oldCursor = this.cursor;
     this.moveCursor(1);
-    if (oldCursor == this.area-1) { this.blinkCursor(); }
+    if (oldCursor == area-1) { this.blinkCursor(); }
   }
 
   nextLine(reset=false) {
     let endPos = this.cursor + cols;
-    // if (this.cursor+1 < this.area && this.screen[this.cursor + 1] != " ") endPos -= this.cursor % cols; // reset to left margin
+    // if (this.cursor+1 < area && this.screen[this.cursor + 1] != " ") endPos -= this.cursor % cols; // reset to left margin
     if (reset) endPos -= this.cursor % cols; // reset to left margin
 
     for (let i = this.cursor; i < endPos; i++) { this.screen.splice(this.cursor,0," "); }
-    if (this.screen.length > this.area) this.screen.splice(this.area, this.screen.length - this.area);
+    if (this.screen.length > area) this.screen.splice(area, this.screen.length - area);
 
     this.cursorToggleTime = (new Date).getTime() + CURSOR_FLASH_TIME;
     this.cursorEN = true;
@@ -288,8 +285,8 @@ export class BasicSlide {
       let bottomLineUpdated = topLineUpdated + 1;
 
       let addedOne = false;
-      for (let nextLine = (Math.floor(this.cursor / cols) + 1) * cols; nextLine < this.area; nextLine += cols) {
-        if (nextLine >= this.area || (this.screen[nextLine-1] == " " && this.screen[nextLine] == " ")) { // remove trailing space
+      for (let nextLine = (Math.floor(this.cursor / cols) + 1) * cols; nextLine < area; nextLine += cols) {
+        if (nextLine >= area || (this.screen[nextLine-1] == " " && this.screen[nextLine] == " ")) { // remove trailing space
           this.screen.splice(nextLine,0, " ");
           bottomLineUpdated = Math.floor(nextLine / cols);
           addedOne = true;
@@ -297,7 +294,7 @@ export class BasicSlide {
         }
       }
       if (!addedOne) {
-        this.screen.splice(this.area,0, " "); // remove bottom-right character
+        this.screen.splice(area,0, " "); // remove bottom-right character
         bottomLineUpdated = rows;
       }
 
@@ -329,7 +326,7 @@ export class BasicSlide {
       this.reRenderChar(oldCursor + this.cursorType[2]);
 
       const spaceInvert = this.screen[this.cursor] == " ";
-      while (oldCursor != this.cursor && this.cursor >= 0 && this.cursor < this.area-1) {
+      while (oldCursor != this.cursor && this.cursor >= 0 && this.cursor < area-1) {
         oldCursor = this.cursor;
         this.cursor += finiteStep;
         if (spaceInvert ^ this.screen[this.cursor] == " ") { break; }
@@ -352,7 +349,7 @@ export class BasicSlide {
     if (this.highlight == -2 && this.cursor < 0) this.cursor = 0;
     else if (this.highlight != -2 && this.cursor < -1) this.cursor = -1;
     else if (this.highlight == -2 && this.cursor < -1) this.cursor = -1;
-    else if (this.cursor >= this.area) this.cursor = this.area-1;
+    else if (this.cursor >= area) this.cursor = area-1;
 
     this.reRenderChar(oldCursor + this.cursorType[2]);
     if (oldCursor != this.cursor) {
@@ -382,7 +379,7 @@ export class BasicSlide {
       this.reRenderChar(oldHighlight - this.cursorType[2]);
 
       const spaceInvert = this.screen[this.highlight] == " ";
-      while (oldHighlight != this.highlight && this.highlight > -1 && this.highlight <= this.area) {
+      while (oldHighlight != this.highlight && this.highlight > -1 && this.highlight <= area) {
         oldHighlight = this.highlight;
         this.highlight += finiteStep;
         if (spaceInvert ^ this.screen[this.highlight] == " ") { break; }
@@ -393,7 +390,7 @@ export class BasicSlide {
 
     this.highlight += step;
     if (this.highlight < -1) this.highlight = -1;
-    else if (this.highlight > this.area) this.highlight = this.area;
+    else if (this.highlight > area) this.highlight = area;
     
     this.cursorToggleTime = (new Date).getTime() + CURSOR_FLASH_TIME;
     this.cursorEN = true;
@@ -416,6 +413,71 @@ export class BasicSlide {
     this.cursor = (step > 0) ? Math.max(oldHighlight, this.cursor) : Math.min(oldHighlight, this.cursor) + 1;
     this.reRenderChar(oldCursor);
     this.reRenderChar(this.cursor);
+  }
+
+  charsToString(chars=this.screen) {
+    let str = "";
+    let workingChar = null;
+    let workingRepeats = 0;
+    for (let i = 0; i < chars.length+1; i++) {
+      const char = (i < chars.length) ? chars[i] : null;
+      if (char != workingChar) {
+        if (workingChar != null) {
+          const workingRepeatsHex = workingRepeats.toString(16);
+          const escapeSequence = "\x18#" + workingRepeatsHex + "\x18";
+          const escapedChar = (workingChar.length != 1) ? `\x18$${workingChar}\x18` : workingChar; // this 'character' is represented by multiple characters
+          
+          if (workingRepeats < escapeSequence.length+1) for (let i = 0; i < workingRepeats; i++) str += escapedChar;
+          else str += escapeSequence + escapedChar;
+        }
+
+        workingRepeats = 0;
+        workingChar = char;
+      }
+      
+      workingRepeats++;
+    }
+    return str;
+  }
+
+  charsFromString(string) {
+    const chars = [];
+    
+    let repeats = 1;
+    let workingChar = "";
+    
+    for (let i = 0; i < string.length; i++) {
+      if (string[i] == "\x18") {
+        const substring = string.substring(i+2);
+        const endI = substring.indexOf("\x18");
+        const data = substring.substring(0,endI);
+        switch(string[i+1]) {
+          case "#":
+            repeats = (endI == -1 || isNaN(parseInt(data, 16))) ? 1 : parseInt(data, 16);
+            break;
+          case "$":
+            workingChar = data;
+            break;
+        }  
+        i += 2 + endI;
+      }
+      else workingChar = string[i]
+      
+      if (workingChar.length != 0) {
+        for (let i = 0; i < repeats; i++) { chars.push(workingChar); }
+        repeats = 1;
+        workingChar = "";
+      }
+    }
+    return chars;
+  }
+
+  save() {
+    const data = {
+      "screen": this.charsToString()
+    };
+    if (this.animation != "default") data.animation = this.animation;
+    return JSON.stringify(data);
   }
 }
 
@@ -472,5 +534,6 @@ export class Slide extends BasicSlide {
 export function setResolution(res) {
   cols = res.x / spacing.x;
   rows = res.y / spacing.y;
+  area = rows * cols;
   previews.setResolution(res);
 }

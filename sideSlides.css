@@ -98,3 +98,40 @@
   user-select: none;
   font-size: 16px;
 }
+
+.slide-preview-containers.transitions {
+  filter: brightness(90%);
+  height: 20px;
+}
+
+.slide-transitions {
+  text-align: center;
+  margin: auto;
+  display: none;
+  font-family: pixelMx;
+  user-select: none;
+
+  border: none;
+  margin: none;
+  padding: none;
+  font-size: 16px;
+  height: inherit;
+}
+
+.slide-preview-containers.transitions.hovers .slide-transitions,
+.slide-preview-containers.transitions:hover .slide-transitions {
+  display: block;
+}
+
+.slide-transition-titles {
+  width: inherit;
+  text-align: center;
+  font-family: pixelMx;
+  user-select: none;
+  font-size: 16px;
+}
+
+.slide-preview-containers.transitions.hovers .slide-transition-titles,
+.slide-preview-containers.transitions:hover .slide-transition-titles {
+  display: none;
+}

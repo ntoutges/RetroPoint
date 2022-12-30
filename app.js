@@ -4,6 +4,7 @@ import * as previews from "./previews.js";
 import * as slides from "./slides.js";
 import { changeCharset, spacing } from "./graphics.js";
 import * as present from "./present.js";
+import * as undo from "./undo.js"
 
 // changeCharset("PETSCII")
 
@@ -65,55 +66,6 @@ canvas.mousemove((e) => {
 //   slides.currentSlide.screen = chars;
 // }, 1000)
 
-const undoStackHeight = 10;
-const undoStack = [];
-
-const pushCounterLimit = 20;
-const pushTimeoutLimit = 500;
-
-var pushCounter = 0;
-var timeout = null;
-function limitedPushToUndoStack(override=false) {
-  if (override) pushCounter = pushCounterLimit+1;
-  
-  if (pushCounter == 0) pushToUndoStack();
-  pushCounter++;
-  
-  if (timeout != null) clearTimeout(timeout);
-  if (!override) {
-    timeout = setTimeout(() => { // reset 0.5s timer
-      pushCounter = 0;
-      timeout = null;
-    }, pushTimeoutLimit);
-  }
-  if (pushCounter > pushCounterLimit) {
-    if (timeout != null) {
-      clearTimeout(timeout);
-      timeout = null;
-    }
-    pushCounter = 0;
-  }
-}
-
-function pushToUndoStack() {
-  if (undoStack.length >= undoStackHeight) undoStack.splice(0,1); // remove "top" of stack
-  undoStack.push({
-    i: slides.slides.indexOf(slides.currentSlide),
-    txt: slides.currentSlide.screen.slice() // copy text
-  });
-}
-
-function pullFromUndoStack() {
-  if (pushCounter != 0) limitedPushToUndoStack(true);
-
-  if (undoStack.length == 0) return;
-  const undo = undoStack.pop(); // pull from "bottom" of stack
-  slides.slides[undo.i].screen = undo.txt;
-  slides.slides[undo.i].render();
-}
-
-
-
 const translations = {
   "+Enter": "\n",
   "!ArrowLeft": "<-",
@@ -136,13 +88,13 @@ window.addEventListener("keydown", (e) => {
   }
 
   if (isPrintable) {
-    limitedPushToUndoStack();
+    undo.limitedPushToUndoStack();
     slides.currentSlide.onkeypress(key, isInsert);
     return;
   }
 
   const change = runCommand(translation, e);
-  if (change) limitedPushToUndoStack();
+  if (change) undo.limitedPushToUndoStack();
 });
 
 function runCommand(translation, e) {
@@ -178,42 +130,34 @@ function runCommand(translation, e) {
     case "^x":
       e.preventDefault();
       runCommand("^c", e);
-      slide.removeWord(isInsert);
+      slide.removeKey(isInsert);
       return true;
     case "^c":
       e.preventDefault();
-      const chars = slide.getHighlightedText();
-      for (let i in chars) {
-        if (chars[i].length != 1) chars[i] = `\x18${chars[i]}\x18`; // this 'character' is represented by multiple characters
-      }
-      navigator.clipboard.writeText(chars.join(""));
+      const toCopy = slide.charsToString(slide.getHighlightedText());
+      navigator.clipboard.writeText(toCopy);
       return false;
     case "^v":
       e.preventDefault();
       navigator.clipboard.readText().then(text => {
-        let inMultiChar = false;
-        let currentChar = "";
-        text = text.replace(/\r/g, ""); // this character is effectively useless, and likely to only cause errors on windows
-        for (let i = 0; i < text.length; i++) {
-          if (text[i] == "\x18") {
-            inMultiChar = !inMultiChar;
-          }
-          else { currentChar += text[i]; }
-          if (!inMultiChar) {
-            if (currentChar == "\n") slide.nextLine(true);
-            else slide.onkeypress(
-              currentChar,
-              isInsert,
-              i == text.length-1
-            );
-            currentChar = "";
-          }
+        const chars = slide.charsFromString(text);
+        for (let i in chars) {
+          if (chars[i] == "\n") slide.nextLine(true);
+          else slide.onkeypress(
+            chars[i],
+            isInsert,
+            i == chars.length-1
+          );
         }
       });
       return true;
     case "^z":
       e.preventDefault();
-      pullFromUndoStack();
+      undo.pullFromUndoStack();
+      return false;
+    case "^s":
+      e.preventDefault();
+      saveSlides();
       return false;
 
     case "ArrowUp":
@@ -277,8 +221,35 @@ function runCommand(translation, e) {
   }
 }
 
-new slides.Slide({ animation: "row" + JSON.stringify({ step:2, delay: 50 }) });
-new slides.Slide({ animation: "inOut{\"type\":\"row\"}" })
-new slides.Slide({})
+function saveSlides() {
+  if (!undo.changeSinceSave) return;
+  undo.madeSave();
+  localStorage.setItem("slideCt", slides.slides.length);
+  for (let i in slides.slides) {
+    const data = slides.slides[i].save();
+    localStorage.setItem(`slide#${i}`, data);
+  }
+}
+
+setTimeout(() => {
+  loadSlides();
+}, 100)
+
+function loadSlides() {
+  let slideCount = localStorage.getItem("slideCt");
+  for (let i = 0; i < slideCount; i++) {
+    const data = JSON.parse(localStorage.getItem(`slide#${i}`));
+    
+    const slide = new slides.Slide({
+      animation: data.animation
+    });
+    slide.screen = slide.charsFromString(data.screen);
+    slide.render();
+  }
+}
+
+// new slides.Slide({ animation: "row" + JSON.stringify({ step:2, delay: 50 }) });
+// new slides.Slide({ animation: "inOut{\"type\":\"row\"}" })
+// new slides.Slide({})
 
 $("#toPresent").click(present.enterFullScreen)
